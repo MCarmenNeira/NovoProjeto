@@ -1,0 +1,160 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+
+
+
+```{r}
+library(tidyverse)
+credito <- read_rds("data/credito.rds")
+```
+
+
+# NovoProjeto
+
+<!-- badges: start -->
+<!-- badges: end -->
+EL objetivo de NovoProjecto es un ejemplo de analisis de la base de datos credito y responder 
+a las siguientes propuestas de anlisis:
+
+- Avaliar quais características definem um cliente bom ou ruim
+- Construir um modelo para prever clientes bons e ruins
+
+
+
+
+
+### 1- Porque a classificação entre RUIN e BOM  e importante 
+
+
+```{r, figures-side, fig.show="hold", out.width="50%"}
+migraf1<-credito %>% 
+  group_by(status) %>%
+  summarise(qtd=n()) 
+migraf1%>%
+  ggplot() +
+  geom_col(
+    aes(x = status, y = qtd, fill = status),
+    show.legend = FALSE
+  )+
+  labs(
+    x="Status",
+    y="prestamos recibidos",
+    title = "Prestamosrecibidos segun status ")+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  plot.subtitle = element_text(hjust = 0.5),
+  text=element_text(size=12, family="mono", colour = "blue")
+  )           
+
+
+
+
+migraf2<-credito %>% 
+  mutate(dif=preco_do_bem-valor_emprestimo) %>%
+  group_by(status) %>% 
+  summarise(media_dif=mean(dif)) 
+migraf2%>%
+  ggplot()+
+  geom_col(aes(x=status, y=media_dif, fill=status))+
+  labs(
+    x="Status",
+    y="Valor neto recibido",
+    title = "Valor meio do emprestimo en relacao ao prezo do bem",
+    subtitle = "(Prezo do bem - Valor emprestimo)")+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  plot.subtitle = element_text(hjust = 0.5),
+  text=element_text(size=12, family="mono", colour = "blue")
+  )           
+
+
+```
+
+
+
+Os gráficos sugerem que a classificação "BOM" facilita o acesso a empréstimos e
+a um valor concedido maior em relação ao valor do bem
+
+
+
+### 2- Avaliar quais características definem um cliente BOM ou RUIM ###
+
+
+```{r}
+
+mitabla<-credito %>% 
+  mutate(status=if_else(status=="bom",1,0),balance=renda-despesas)
+
+mod_logit <-glm(status ~ idade+tempo_empresa+moradia+estado_civil+
+                  trabalho+balance+ativos+dividas, data=mitabla, family="binomial")
+#mod_logit %>% summary() %>% knitr::kable(caption = "Legenda", digits=2) %>% 
+mod_logit %>% summary() 
+```
+
+
+
+
+
+```{r}
+a<-tibble(
+  Factores_positivos     = c("tempo_empresa","moradia pais" , "moradia própria", 
+                             "trabalho fixo", "balance positivo", "ativos"),
+  Factores_negativos     =c( "estado civil separado", "estado civil divorciado", 
+                             "trabalho meio período", "idade", "dividas"," " ),
+  Factores_non_influentes=c( "moradia outras", "moradia priv","estado civil solteiro",
+                             "estado civil viúvo", "trabalho outros"," ")
+)
+```
+
+
+
+
+```{r}
+a %>% knitr::kable(col.names = gsub("[_]", " ", names(a)), caption = "") 
+```
+
+
+
+
+```{r}
+library(vcd)
+predicciones <- ifelse(test = mod_logit$fitted.values > 0.5, yes = 1, no = 0)
+matriz_confusion <- table(mod_logit$model$status, predicciones,
+                          dnn = c("observaciones", "predicciones"))
+matriz_confusion
+```
+
+
+
+(285+2834)/(285+2834+733+168)=0.7758
+**O modelo pode predecir el 77% de las clasifiaciones entre "BOM" e "RUIN" **
+
+
+
+```{r}
+mosaic(matriz_confusion, shade = T, colorize = T,
+       gp = gpar(fill = matrix(c("green4", "red4", "red4", "green4"), 2, 2)))
+```
+
+
+
+```{r}
+with(mod_logit, pchisq(null.deviance - deviance, df.null - df.residual
+, lower.tail = FALSE))
+```
+
+**El valor p está cerca de 0, lo que muestra un modelo altamente significativo.**
+
+
